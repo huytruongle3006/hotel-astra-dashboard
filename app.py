@@ -14,13 +14,17 @@ load_dotenv()
 app = Flask(__name__)
 
 # Khởi tạo kết nối Cassandra Astra DB
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+bundle_path = os.path.join(BASE_DIR, 'secure-connect-demo-hotel.zip')
+
 cloud_config = {
-    'secure_connect_bundle': os.getenv('ASTRA_DB_SECURE_BUNDLE_PATH')
+    'secure_connect_bundle': bundle_path
 }
-auth_provider = PlainTextAuthProvider(
-    'token', 
-    os.getenv('ASTRA_DB_APPLICATION_TOKEN')
-)
+
+# Lấy token từ file .env nếu chạy local, hoặc lấy từ biến môi trường
+token = os.getenv('ASTRA_DB_APPLICATION_TOKEN')
+
+auth_provider = PlainTextAuthProvider('token', token)
 cluster = Cluster(cloud=cloud_config, auth_provider=auth_provider)
 session = cluster.connect(os.getenv('ASTRA_DB_KEYSPACE', 'default_keyspace'))
 
