@@ -2,3 +2,4 @@ Flask
 cassandra-driver
 gevent
 gunicorn
+python-dotenv
