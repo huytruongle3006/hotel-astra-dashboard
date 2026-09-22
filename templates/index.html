@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Quản Trị Khách Sạn - Astra DB (18 Queries)</title>
+    <!-- Bootstrap 5 CSS & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --primary-color: #1e293b;
+            --accent-color: #0d9488;
+        }
+        body { background-color: #f1f5f9; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background-color: var(--primary-color);
+            position: fixed;
+            top: 0; left: 0; z-index: 1000;
+        }
+        .main-wrapper { margin-left: var(--sidebar-width); }
+        .nav-pills .nav-link {
+            color: #cbd5e1;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .nav-pills .nav-link.active {
+            background-color: var(--accent-color);
+            color: #fff;
+        }
+        .room-card {
+            border-radius: 10px;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .room-card:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .room-available { border-color: #10b981; background: #ecfdf5; }
+        .room-occupied { border-color: #ef4444; background: #fef2f2; }
+        .room-maintenance { border-color: #f59e0b; background: #fffbeb; }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR ADMIN -->
+<aside class="sidebar p-3 text-white d-flex flex-column">
+    <div class="d-flex align-items-center mb-4 pb-3 border-bottom border-secondary">
+        <i class="bi bi-building-fill-gear fs-2 text-warning me-2"></i>
+        <div>
+            <h6 class="mb-0 fw-bold">GRAND HOTEL</h6>
+            <small class="text-secondary">Cassandra Admin Panel</small>
+        </div>
+    </div>
+
+    <ul class="nav nav-pills flex-column mb-auto" id="adminTabs">
+        <li class="nav-item">
+            <a href="#tab-rooms" class="nav-link active" data-bs-toggle="pill">
+                <i class="bi bi-door-open me-2"></i> Quản Lý Sơ Đồ Phòng
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="#tab-bookings" class="nav-link" data-bs-toggle="pill">
+                <i class="bi bi-calendar-check me-2"></i> Đặt Phòng & Lịch Trình
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="#tab-guests" class="nav-link" data-bs-toggle="pill">
+                <i class="bi bi-people me-2"></i> Hồ Sơ Khách Hàng
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="#tab-invoices" class="nav-link" data-bs-toggle="pill">
+                <i class="bi bi-receipt me-2"></i> Thu Ngân & Hóa Đơn
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="#tab-reports" class="nav-link" data-bs-toggle="pill">
+                <i class="bi bi-graph-up-arrow me-2"></i> Báo Cáo & Thống Kê
+            </a>
+        </li>
+    </ul>
+
+    <div class="border-top border-secondary pt-3 mt-auto small">
+        <div class="d-flex align-items-center text-success mb-1">
+            <i class="bi bi-hdd-network-fill me-2"></i> Astra DB Connected
+        </div>
+        <div class="text-muted">Cụm: <code>default_keyspace</code></div>
+        <div class="mt-2 text-warning"><i class="bi bi-lightning-fill"></i> Chuẩn 18 Queries CQL</div>
+    </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main-wrapper">
+    <!-- Navbar Header -->
+    <header class="bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center sticky-top">
+        <div class="d-flex align-items-center">
+            <span class="text-muted me-2">Chi nhánh:</span>
+            <select class="form-select form-select-sm fw-bold w-auto" id="currentHotelSelect" onchange="reloadAllData()">
+                <option value="HTL001">HTL001 - Saigon Riverside Hotel</option>
+                <option value="HTL002">HTL002 - Hanoi Old Quarter Hotel</option>
+            </select>
+            <!-- Nút thêm chi nhánh mới (Q16) -->
+            <button class="btn btn-sm btn-outline-success ms-2" data-bs-toggle="modal" data-bs-target="#newHotelModal">
+                <i class="bi bi-plus-circle me-1"></i> Thêm Khách Sạn (Q16)
+            </button>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <span id="hotelInfoBadge" class="badge bg-light text-dark border p-2">Đang tải thông tin...</span>
+            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                <i class="bi bi-person"></i>
+            </div>
+        </div>
+    </header>
+
+    <div class="p-4">
+        <div class="tab-content">
+
+            <!-- PHÂN HỆ 1: SƠ ĐỒ PHÒNG (Áp dụng Q2, Q7, Q1, Q13) -->
+            <div class="tab-pane fade show active" id="tab-rooms">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Sơ Đồ Phòng Trực Quan (Q2)</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editRoomModal">
+                            <i class="bi bi-pencil-square me-1"></i> Đổi Giá / Hạng Phòng (Q13)
+                        </button>
+                        <span class="badge bg-success">Trống</span>
+                        <span class="badge bg-danger">Đang Sử Dụng</span>
+                        <span class="badge bg-warning text-dark">Bảo Trì</span>
+                    </div>
+                </div>
+
+                <div class="row g-3" id="roomContainer">
+                    <div class="text-center py-5 text-muted">Đang tải danh sách phòng...</div>
+                </div>
+            </div>
+
+            <!-- PHÂN HỆ 2: ĐẶT PHÒNG & LỊCH TRÌNH (Áp dụng Q4, Q8, Q9) -->
+            <div class="tab-pane fade" id="tab-bookings">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-calendar3 text-primary me-2"></i>Quản Lý Đặt Phòng Chi Nhánh (Q4)</h5>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newBookingModal">
+                        <i class="bi bi-plus-lg me-1"></i> Tạo Đặt Phòng Mới (Q8)
+                    </button>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-auto"><label class="form-label mb-0 small text-muted">Từ ngày:</label></div>
+                            <div class="col-auto"><input type="date" class="form-control form-control-sm" id="bkStart" value="2026-10-01"></div>
+                            <div class="col-auto"><label class="form-label mb-0 small text-muted">Đến ngày:</label></div>
+                            <div class="col-auto"><input type="date" class="form-control form-control-sm" id="bkEnd" value="2026-12-31"></div>
+                            <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-primary" onclick="loadBookings()"><i class="bi bi-search me-1"></i>Lọc lịch (Q4)</button></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>MÃ ĐẶT (UUID)</th>
+                                    <th>NGÀY CHECK-IN</th>
+                                    <th>NGÀY CHECK-OUT</th>
+                                    <th>KHÁCH HÀNG</th>
+                                    <th>PHÒNG</th>
+                                    <th>TỔNG TIỀN</th>
+                                    <th>TRẠNG THÁI</th>
+                                    <th class="text-end">THAO TÁC</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookingTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PHÂN HỆ 3: HỒ SƠ KHÁCH HÀNG (Áp dụng Q6, Q12, Q3, Q14, Q17) -->
+            <div class="tab-pane fade" id="tab-guests">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-person-vcard text-primary me-2"></i>Danh Sách Khách Hàng (Q12)</h5>
+                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newGuestModal">
+                        <i class="bi bi-person-plus me-1"></i> Thêm Khách Mới (Q6)
+                    </button>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white fw-bold">Tra Cứu Hồ Sơ & Lịch Sử (Q12 & Q3)</div>
+                            <div class="card-body">
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="searchGuestId" value="GUEST001" placeholder="Nhập Guest ID">
+                                    <button class="btn btn-primary" type="button" onclick="lookupGuest()"><i class="bi bi-search"></i> Tìm</button>
+                                </div>
+                                <div id="guestProfileDetails" class="p-3 border rounded bg-light">
+                                    <div class="text-muted small">Nhập mã khách để xem thông tin chi tiết và lịch sử đặt phòng.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white fw-bold">Lịch Sử Các Lần Đặt Của Khách (Q3)</div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead><tr><th>Check-in</th><th>Khách sạn</th><th>Phòng</th><th>Tổng tiền</th><th>Trạng thái</th></tr></thead>
+                                    <tbody id="guestHistoryBody">
+                                        <tr><td colspan="5" class="text-center text-muted py-3">Chưa tải lịch sử.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PHÂN HỆ 4: HÓA ĐƠN & THU NGÂN (Áp dụng Q5, Q11, Q15) -->
+            <div class="tab-pane fade" id="tab-invoices">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-cash-stack text-primary me-2"></i>Quản Lý Hóa Đơn & Thu Ngân (Q5, Q11)</h5>
+                    <button class="btn btn-danger btn-sm" type="button" onclick="loadUnpaidInvoices()">
+                        <i class="bi bi-exclamation-octagon me-1"></i> Lọc Đơn Chưa Thanh Toán (Q11)
+                    </button>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>MÃ HÓA ĐƠN</th>
+                                    <th>MÃ BOOKING</th>
+                                    <th>KHÁCH HÀNG</th>
+                                    <th>TIỀN PHÒNG</th>
+                                    <th>DỊCH VỤ & THUẾ</th>
+                                    <th>TỔNG THANH TOÁN</th>
+                                    <th>TRẠNG THÁI</th>
+                                    <th class="text-end">QUYẾT TOÁN (Q15)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoiceTableBody">
+                                <tr><td colspan="8" class="text-center text-muted py-4">Bấm vào nút phía trên để lọc các hóa đơn cần thu tiền.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PHÂN HỆ 5: BÁO CÁO & THỐNG KÊ (Áp dụng Q10, Q18) -->
+            <div class="tab-pane fade" id="tab-reports">
+                <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-line text-primary me-2"></i>Báo Cáo Tình Hình Khách Sạn (Q10 & Q18)</h5>
+                <div class="row g-3" id="statsContainer">
+                    <!-- Dynamic loaded -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: TẠO ĐẶT PHÒNG MỚI (Q8) - DÙNG THẺ DIV CHỐNG SUBMIT KÉP -->
+<div class="modal fade" id="newBookingModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-calendar-plus me-2"></i>Tạo Đặt Phòng Mới (Atomic Batch - Q8)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div id="bookingFormArea">
+                <div class="modal-body">
+                    <h6 class="fw-bold text-secondary mb-3 border-bottom pb-2">1. Thông tin định danh khách hàng</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Họ và Tên khách hàng *</label>
+                            <input type="text" class="form-control" id="formGuestName" placeholder="Ví dụ: Nguyễn Văn Bình">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Số điện thoại liên hệ *</label>
+                            <input type="tel" class="form-control" id="formGuestPhone" placeholder="09xxxxxxxx">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Số CCCD / Hộ chiếu *</label>
+                            <input type="text" class="form-control" id="formGuestNatId" placeholder="079xxxxxxxx">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Email</label>
+                            <input type="email" class="form-control" id="formGuestEmail" placeholder="khachhang@gmail.com">
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold text-secondary mb-3 border-bottom pb-2">2. Chi tiết phòng & Thanh toán</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Chọn phòng còn trống *</label>
+                            <select class="form-select" id="formRoomNo" onchange="onRoomSelected()">
+                                <option value="">-- Đang kiểm tra phòng trống... --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Tổng số tiền (VNĐ) *</label>
+                            <input type="number" class="form-control" id="formAmount" placeholder="Tự động tính theo phòng & số đêm">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Ngày nhận phòng (Check-in) *</label>
+                            <input type="date" class="form-control" id="formCheckIn" value="2026-10-05" onchange="onRoomSelected()">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Ngày trả phòng (Check-out) *</label>
+                            <input type="date" class="form-control" id="formCheckOut" value="2026-10-07" onchange="onRoomSelected()">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" id="btnSubmitBooking" class="btn btn-primary px-4" onclick="handleCreateBooking()">
+                        <i class="bi bi-check2-circle me-1"></i> Xác Nhận Đặt Phòng
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: THÊM KHÁCH HÀNG (Q6) -->
+<div class="modal fade" id="newGuestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Đăng Ký Khách Hàng (Q6)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Mã Khách (Guest ID)</label><input type="text" class="form-control" id="gGuestId" value="GUEST003"></div>
+                <div class="mb-2"><label class="form-label small">Họ Tên</label><input type="text" class="form-control" id="gName" value="Le Van C"></div>
+                <div class="mb-2"><label class="form-label small">Số Điện Thoại</label><input type="text" class="form-control" id="gPhone" value="0988776655"></div>
+                <div class="mb-2"><label class="form-label small">Email</label><input type="email" class="form-control" id="gEmail" value="levanc@gmail.com"></div>
+                <div class="mb-2"><label class="form-label small">CCCD / CMND</label><input type="text" class="form-control" id="gNatId" value="079200005566"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" onclick="handleCreateGuest()">Lưu Hồ Sơ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: CẬP NHẬT GIÁ & LOẠI PHÒNG (Q13) -->
+<div class="modal fade" id="editRoomModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Điều Chỉnh Phòng (Q13)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small">Số phòng cần sửa</label>
+                    <input type="number" class="form-control" id="mEditRoomNo" value="101">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Hạng phòng mới</label>
+                    <input type="text" class="form-control" id="mEditRoomType" value="Deluxe Ocean">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Đơn giá mới (VNĐ/đêm)</label>
+                    <input type="number" class="form-control" id="mEditRoomPrice" value="1500000">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" onclick="handleUpdateRoomPrice()">Lưu Thay Đổi (Q13)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: THÊM CHI NHÁNH MỚI (Q16) -->
+<div class="modal fade" id="newHotelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Khai Trương Chi Nhánh Mới (Q16)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Mã Khách Sạn (hotel_id)</label><input type="text" class="form-control" id="hHotelId" value="HTL003"></div>
+                <div class="mb-2"><label class="form-label small">Tên Khách Sạn</label><input type="text" class="form-control" id="hName" value="Grand Da Nang Beach Resort"></div>
+                <div class="mb-2"><label class="form-label small">Thành Phố</label><input type="text" class="form-control" id="hCity" value="Da Nang"></div>
+                <div class="mb-2"><label class="form-label small">Địa Chỉ</label><input type="text" class="form-control" id="hAddress" value="Vo Nguyen Giap, Son Tra"></div>
+                <div class="row g-2">
+                    <div class="col"><label class="form-label small">Số Sao</label><input type="number" class="form-control" id="hStars" value="5"></div>
+                    <div class="col"><label class="form-label small">Hotline</label><input type="text" class="form-control" id="hPhone" value="02363999888"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-success" onclick="handleCreateHotel()">Lưu Khách Sạn (Q16)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

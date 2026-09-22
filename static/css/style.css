@@ -1,0 +1,39 @@
+/* Custom style bổ trợ cho Bootstrap 5 */
+body {
+    background-color: #f8fafc;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.sidebar {
+    width: 260px;
+    min-height: 100vh;
+    background-color: #0f172a;
+}
+
+.sidebar .nav-link {
+    border-radius: 8px;
+    font-size: 0.95rem;
+    padding: 0.6rem 1rem;
+}
+
+.sidebar .nav-link.active {
+    background-color: #2563eb !important;
+}
+
+.stat-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+}
+
+pre code {
+    font-family: 'Consolas', 'Courier New', Courier, monospace;
+    font-size: 0.9rem;
+}
+
+.list-group-item.active {
+    background-color: #0d9488;
+    border-color: #0d9488;
+}

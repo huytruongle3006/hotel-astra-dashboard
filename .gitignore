@@ -1,0 +1,12 @@
+# Environment variables
+.env
+
+# Astra DB Security Bundle
+*.zip
+secure-connect-*.zip
+
+# Python cache
+__pycache__/
+*.pyc
+venv/
+.venv/
