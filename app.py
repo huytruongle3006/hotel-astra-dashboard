@@ -435,4 +435,6 @@ def execute_query(query_id):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, use_reloader=False, port=5000)
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', debug=False, use_reloader=False, port=port)
