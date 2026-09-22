@@ -1,3 +1,4 @@
-cassandra-driver>=3.28.0
-python-dotenv>=1.0.0
-flask>=3.0.0
+Flask
+cassandra-driver
+gevent
+gunicorn
