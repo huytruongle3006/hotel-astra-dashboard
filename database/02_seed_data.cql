@@ -1,5 +1,5 @@
 -- Script DML: Nạp dữ liệu mẫu
-USE hotel_ks;
+USE Demo_hotel;
 
 -- Dữ liệu khách sạn
 INSERT INTO hotels (hotel_id, hotel_name, city, address, star_rating, phone) 
