@@ -97,147 +97,65 @@ def execute_query(query_id):
             session.execute(cql_executed)
             data = [{"message": f"Cập nhật phòng {room_no} sang trạng thái {status} thành công!"}]
 
-   # Q8: Tạo đặt phòng (Chỉ cho phép POST và đảm bảo ghi duy nhất 1 lần vào mỗi bảng)
+        # Q8: Đặt phòng mới (Atomic Logged Batch) kèm tự động tạo hóa đơn UNPAID
         elif query_id == 'Q8':
-            if request.method != 'POST':
-                return jsonify({"status": "error", "message": "Phương thức không hợp lệ"}), 405
-
-            req = request.get_json(force=True) or {}
-            g_id = req.get('guest_id', f"GUEST_{uuid.uuid4().hex[:6]}")
-            g_name = req.get('guest_name', 'Khách vãng lai')
-            g_phone = req.get('phone', '')
-            g_email = req.get('email', '')
-            g_nat_id = req.get('national_id', '')
-            h_id = req.get('hotel_id', 'HTL001')
-            h_name = req.get('hotel_name', 'Saigon Riverside Hotel')
-            room_no = int(req.get('room_number'))
-            amount = float(req.get('total_amount', 0))
-            
-            cin_parts = [int(p) for p in req.get('check_in_date').split('-')]
-            cout_parts = [int(p) for p in req.get('check_out_date').split('-')]
-            d_cin = date(cin_parts[0], cin_parts[1], cin_parts[2])
-            d_cout = date(cout_parts[0], cout_parts[1], cout_parts[2])
-
-            # Chỉ tạo 1 mã UUID duy nhất cho toàn bộ giao dịch
-            new_booking_id = uuid.uuid4()
-
-            # Chuẩn bị statement riêng biệt cho từng bảng
-            ps_guest = session.prepare(
-                "INSERT INTO guests (guest_id, full_name, phone, email, national_id) VALUES (?, ?, ?, ?, ?)"
-            )
-            ps_by_guest = session.prepare(
-                "INSERT INTO bookings_by_guest (guest_id, check_in_date, booking_id, hotel_id, hotel_name, room_number, check_out_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            )
-            ps_by_hotel = session.prepare(
-                "INSERT INTO bookings_by_hotel_date (hotel_id, check_in_date, booking_id, guest_id, guest_name, room_number, check_out_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            )
-            ps_update_room = session.prepare(
-                "UPDATE rooms_by_hotel SET status = 'OCCUPIED' WHERE hotel_id = ? AND room_number = ?"
-            )
-
-            # Khởi tạo Batch và chỉ add đúng MỖI BẢNG MỘT LẦN DUY NHẤT
-            batch = BatchStatement(batch_type=BatchType.LOGGED)
-            batch.add(ps_guest, (g_id, g_name, g_phone, g_email, g_nat_id))
-            batch.add(ps_by_guest, (g_id, d_cin, new_booking_id, h_id, h_name, room_no, d_cout, amount, 'CONFIRMED'))
-            batch.add(ps_by_hotel, (h_id, d_cin, new_booking_id, g_id, g_name, room_no, d_cout, amount, 'CONFIRMED'))
-            batch.add(ps_update_room, (h_id, room_no))
-            
-            # Thực thi một lần duy nhất
-            session.execute(batch)
-
-            return jsonify({
-                "status": "success",
-                "data": [{
-                    "message": f"Đã đặt phòng {room_no} thành công!",
-                    "booking_id": str(new_booking_id)
-                }]
-            })
             req = request.json or {}
-            g_id = req.get('guest_id', f"GUEST_{uuid.uuid4().hex[:6]}")
-            g_name = req.get('guest_name', 'Khách vãng lai')
-            g_phone = req.get('phone', '')
-            g_email = req.get('email', '')
-            g_nat_id = req.get('national_id', '')
-            h_id = req.get('hotel_id', 'HTL001')
-            h_name = req.get('hotel_name', 'Saigon Riverside Hotel')
-            room_no = int(req.get('room_number'))  # Ép kiểu INT bắt buộc
-            amount = float(req.get('total_amount', 0))
-            
-            cin_parts = [int(p) for p in req.get('check_in_date').split('-')]
-            cout_parts = [int(p) for p in req.get('check_out_date').split('-')]
-            d_cin = date(cin_parts[0], cin_parts[1], cin_parts[2])
-            d_cout = date(cout_parts[0], cout_parts[1], cout_parts[2])
+            guest_name = req.get('guest_name', 'Khách Vãng Lai')
+            phone = req.get('phone', '0900000000')
+            email = req.get('email', 'guest@example.com')
+            national_id = req.get('national_id', '000000000000')
+            hotel_id = req.get('hotel_id', 'HTL001')
+            room_number = int(req.get('room_number', 101))
+            check_in = req.get('check_in_date', '2026-10-01')
+            check_out = req.get('check_out_date', '2026-10-03')
+            total_amount = float(req.get('total_amount', 2000000))
 
-            new_booking_id = uuid.uuid4()
+            guest_id = f"G_{phone}"
+            b_id = uuid.uuid1()
+            inv_id = uuid.uuid1()
 
-            # 1. Ghi BATCH đồng thời hồ sơ khách và 2 bảng đặt phòng
-            ps_guest = session.prepare(
-                "INSERT INTO guests (guest_id, full_name, phone, email, national_id) VALUES (?, ?, ?, ?, ?)"
-            )
-            ps_by_guest = session.prepare(
-                "INSERT INTO bookings_by_guest (guest_id, check_in_date, booking_id, hotel_id, hotel_name, room_number, check_out_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            )
-            ps_by_hotel = session.prepare(
-                "INSERT INTO bookings_by_hotel_date (hotel_id, check_in_date, booking_id, guest_id, guest_name, room_number, check_out_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            # Lấy tên khách sạn hiển thị
+            hotel_row = session.execute(f"SELECT hotel_name FROM hotels WHERE hotel_id = '{hotel_id}';").one()
+            hotel_name = hotel_row.hotel_name if hotel_row else "Grand Hotel"
+
+            # 1. Lưu thông tin khách hàng nếu chưa có
+            session.execute(
+                "INSERT INTO guests (guest_id, full_name, phone, email, national_id) VALUES (%s, %s, %s, %s, %s);",
+                (guest_id, guest_name, phone, email, national_id)
             )
 
+            # 2. Dùng Batch để tạo đơn đặt phòng đồng bộ trên 2 bảng
             batch = BatchStatement(batch_type=BatchType.LOGGED)
-            batch.add(ps_guest, (g_id, g_name, g_phone, g_email, g_nat_id))
-            batch.add(ps_by_guest, (g_id, d_cin, new_booking_id, h_id, h_name, room_no, d_cout, amount, 'CONFIRMED'))
-            batch.add(ps_by_hotel, (h_id, d_cin, new_booking_id, g_id, g_name, room_no, d_cout, amount, 'CONFIRMED'))
+            ps_bg = session.prepare("""
+                INSERT INTO bookings_by_guest (guest_id, check_in_date, booking_id, hotel_id, hotel_name, room_number, check_out_date, total_amount, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED')
+            """)
+            ps_bhd = session.prepare("""
+                INSERT INTO bookings_by_hotel_date (hotel_id, check_in_date, booking_id, guest_id, guest_name, room_number, check_out_date, total_amount, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED')
+            """)
+            batch.add(ps_bg, (guest_id, check_in, b_id, hotel_id, hotel_name, room_number, check_out, total_amount))
+            batch.add(ps_bhd, (hotel_id, check_in, b_id, guest_id, guest_name, room_number, check_out, total_amount))
             session.execute(batch)
 
-            # 2. Chạy trực tiếp câu UPDATE Q7 để đảm bảo Cassandra đổi trạng thái phòng sang OCCUPIED
-            cql_update_room = f"UPDATE rooms_by_hotel SET status = 'OCCUPIED' WHERE hotel_id = '{h_id}' AND room_number = {room_no};"
-            session.execute(cql_update_room)
+            # 3. Đổi trạng thái phòng sang OCCUPIED
+            session.execute(
+                f"UPDATE rooms_by_hotel SET status = 'OCCUPIED' WHERE hotel_id = '{hotel_id}' AND room_number = {room_number};"
+            )
+
+            # 4. TỰ ĐỘNG TẠO HÓA ĐƠN UNPAID VÀO invoices_by_booking
+            room_charge = total_amount * 0.9
+            tax = total_amount * 0.1
+            session.execute("""
+                INSERT INTO invoices_by_booking (booking_id, invoice_id, guest_id, hotel_id, room_charge, service_charge, tax, total_amount, payment_status, issued_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'UNPAID', toTimestamp(now()));
+            """, (b_id, inv_id, guest_id, hotel_id, room_charge, 0, tax, total_amount))
 
             data = [{
-                "message": f"Đã đặt phòng {room_no} thành công và chuyển trạng thái sang OCCUPIED!",
-                "booking_id": str(new_booking_id)
+                "message": "Đặt phòng và khởi tạo hóa đơn thanh toán thành công!",
+                "booking_id": str(b_id),
+                "invoice_id": str(inv_id)
             }]
-            req = request.json or {}
-            g_id = req.get('guest_id', f"GUEST_{uuid.uuid4().hex[:6]}")
-            g_name = req.get('guest_name', 'Khách vãng lai')
-            g_phone = req.get('phone', '')
-            g_email = req.get('email', '')
-            g_nat_id = req.get('national_id', '')
-            h_id = req.get('hotel_id', 'HTL001')
-            h_name = req.get('hotel_name', 'Saigon Riverside Hotel')
-            room_no = int(req.get('room_number', 101))
-            amount = float(req.get('total_amount', 0))
-            
-            # Chuyển đổi định dạng ngày YYYY-MM-DD
-            cin_parts = [int(p) for p in req.get('check_in_date').split('-')]
-            cout_parts = [int(p) for p in req.get('check_out_date').split('-')]
-            d_cin = date(cin_parts[0], cin_parts[1], cin_parts[2])
-            d_cout = date(cout_parts[0], cout_parts[1], cout_parts[2])
-
-            new_booking_id = uuid.uuid4()
-
-            # Chuẩn bị statement cho cả 3 bảng
-            ps_guest = session.prepare(
-                "INSERT INTO guests (guest_id, full_name, phone, email, national_id) VALUES (?, ?, ?, ?, ?)"
-            )
-            ps_by_guest = session.prepare(
-                "INSERT INTO bookings_by_guest (guest_id, check_in_date, booking_id, hotel_id, hotel_name, room_number, check_out_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            )
-            ps_by_hotel = session.prepare(
-                "INSERT INTO bookings_by_hotel_date (hotel_id, check_in_date, booking_id, guest_id, guest_name, room_number, check_out_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            )
-
-            # Thực thi Atomic Logged Batch
-            batch = BatchStatement(batch_type=BatchType.LOGGED)
-            batch.add(ps_guest, (g_id, g_name, g_phone, g_email, g_nat_id))
-            batch.add(ps_by_guest, (g_id, d_cin, new_booking_id, h_id, h_name, room_no, d_cout, amount, 'CONFIRMED'))
-            batch.add(ps_by_hotel, (h_id, d_cin, new_booking_id, g_id, g_name, room_no, d_cout, amount, 'CONFIRMED'))
-            session.execute(batch)
-
-            data = [{
-                "message": "Đã tạo đặt phòng và lưu hồ sơ khách hàng thành công!",
-                "booking_id": str(new_booking_id),
-                "guest_name": g_name
-            }]
-
     
         # Q9: Hủy đặt phòng (Xóa 2 bảng đặt phòng + Cập nhật phòng về AVAILABLE)
         elif query_id == 'Q9':
