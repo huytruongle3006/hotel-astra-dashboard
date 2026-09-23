@@ -469,6 +469,7 @@ function handleDeleteGuest(guestId) {
 // ----------------------------------------------------------------------------
 function loadUnpaidInvoices() {
     const tbody = document.getElementById('invoiceTableBody');
+    if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-danger"></div> Đang lọc hóa đơn chưa thanh toán từ Astra DB...</td></tr>';
 
     fetch('/api/query/Q11')
@@ -484,17 +485,25 @@ function loadUnpaidInvoices() {
                 const bId = iv.booking_id || '';
                 const displayInv = invId.length > 8 ? invId.substring(0, 8) + '...' : (invId || 'INV-AUTO');
                 const displayBk = bId.length > 8 ? bId.substring(0, 8) + '...' : (bId || 'BOOKING-AUTO');
+                
+                // Tính toán tiền phòng và thuế/phí nếu chưa có cột riêng
+                const total = Number(iv.total_amount || 0);
+                const roomCharge = Number(iv.room_charge || total * 0.9);
+                const feeAndTax = Number((iv.service_charge || 0) + (iv.tax || total * 0.1));
 
                 tbody.innerHTML += `
                     <tr id="row-inv-${index}">
-                        <td><code class="small text-secondary">${displayInv}</code></td>
+                        <td><a href="javascript:void(0)" onclick="viewInvoiceDetail('${bId}')" class="fw-bold text-decoration-none text-primary" title="Bấm để xem chi tiết Q5"><i class="bi bi-receipt me-1"></i>${displayInv}</a></td>
                         <td><code>${displayBk}</code></td>
                         <td><strong>${iv.guest_id || 'GUEST001'}</strong></td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td class="text-danger fw-bold">${Number(iv.total_amount || 0).toLocaleString()} đ</td>
+                        <td class="text-muted">${roomCharge.toLocaleString()} đ</td>
+                        <td class="text-muted">${feeAndTax.toLocaleString()} đ</td>
+                        <td class="text-danger fw-bold">${total.toLocaleString()} đ</td>
                         <td><span class="badge bg-danger" id="badge-${index}">${iv.payment_status}</span></td>
                         <td class="text-end">
+                            <button class="btn btn-sm btn-outline-info me-1" onclick="viewInvoiceDetail('${bId}')" title="Xem chi tiết hóa đơn (Q5)">
+                                <i class="bi bi-eye"></i> Q5
+                            </button>
                             <button class="btn btn-sm btn-outline-success" id="btn-pay-${index}" onclick="handlePayInvoice('${bId}', '${invId}', ${index})">
                                 <i class="bi bi-cash-coin me-1"></i> Thu tiền (Q15)
                             </button>
@@ -508,6 +517,41 @@ function loadUnpaidInvoices() {
         });
 }
 
+// Hàm gọi API Q5 để hiển thị chi tiết hóa đơn
+function viewInvoiceDetail(bookingId) {
+    if (!bookingId) {
+        alert("Không tìm thấy mã đặt phòng để xem chi tiết!");
+        return;
+    }
+
+    fetch(`/api/query/Q5?booking_id=${bookingId}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'success' && res.data && res.data.length > 0) {
+                const inv = res.data[0];
+                alert(
+                    `🧾 CHI TIẾT HÓA ĐƠN (Q5)\n` +
+                    `---------------------------------------\n` +
+                    `• Mã Hóa Đơn: ${inv.invoice_id}\n` +
+                    `• Mã Booking: ${inv.booking_id}\n` +
+                    `• Khách Hàng: ${inv.guest_id}\n` +
+                    `• Khách Sạn: ${inv.hotel_id}\n` +
+                    `• Tiền phòng: ${Number(inv.room_charge).toLocaleString()} đ\n` +
+                    `• Phí dịch vụ: ${Number(inv.service_charge).toLocaleString()} đ\n` +
+                    `• Thuế VAT: ${Number(inv.tax).toLocaleString()} đ\n` +
+                    `---------------------------------------\n` +
+                    `💰 TỔNG CỘNG: ${Number(inv.total_amount).toLocaleString()} đ\n` +
+                    `📌 Trạng thái: ${inv.payment_status}\n` +
+                    `🕒 Ngày tạo: ${inv.issued_at || 'Mới khởi tạo'}`
+                );
+            } else {
+                alert("Không thể tải chi tiết hóa đơn từ hệ thống!");
+            }
+        })
+        .catch(err => {
+            alert("Lỗi khi gọi API Q5: " + err);
+        });
+}
 // Q15: Quyết toán hóa đơn sang PAID
 function handlePayInvoice(bookingId, invoiceId, rowIndex) {
     if (!confirm("Xác nhận đã thu đủ tiền và chuyển trạng thái hóa đơn sang PAID?")) return;

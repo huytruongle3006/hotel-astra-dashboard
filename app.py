@@ -70,7 +70,33 @@ def execute_query(query_id):
             data = [{"check_in_date": str(r.check_in_date), "booking_id": str(r.booking_id), "guest_name": r.guest_name, "room_number": r.room_number, "check_out_date": str(r.check_out_date), "total_amount": float(r.total_amount), "status": r.status} for r in rows]
 
         # Q5: Tra cứu hóa đơn theo booking_id
+        # Q5: Tra cứu chi tiết hóa đơn theo mã đặt phòng (booking_id)
         elif query_id == 'Q5':
+            b_id_str = request.args.get('booking_id')
+            if not b_id_str:
+                return jsonify({"status": "error", "message": "Thiếu booking_id!"}), 400
+            
+            try:
+                b_uuid = uuid.UUID(b_id_str)
+            except ValueError:
+                return jsonify({"status": "error", "message": "booking_id không hợp lệ!"}), 400
+
+            cql_executed = f"SELECT invoice_id, booking_id, guest_id, hotel_id, room_charge, service_charge, tax, total_amount, payment_status, issued_at FROM invoices_by_booking WHERE booking_id = {b_uuid};"
+            rows = session.execute(cql_executed)
+            data = []
+            for r in rows:
+                data.append({
+                    "invoice_id": str(r.invoice_id),
+                    "booking_id": str(r.booking_id),
+                    "guest_id": r.guest_id,
+                    "hotel_id": r.hotel_id,
+                    "room_charge": float(r.room_charge) if r.room_charge else 0.0,
+                    "service_charge": float(r.service_charge) if r.service_charge else 0.0,
+                    "tax": float(r.tax) if r.tax else 0.0,
+                    "total_amount": float(r.total_amount) if r.total_amount else 0.0,
+                    "payment_status": r.payment_status,
+                    "issued_at": str(r.issued_at) if r.issued_at else ""
+                })
             booking_id = request.args.get('booking_id', '3f2504e0-4f89-11d3-9a0c-0305e82c3301')
             cql_executed = f"SELECT * FROM invoices_by_booking WHERE booking_id = {booking_id};"
             rows = session.execute(cql_executed)
